@@ -11,7 +11,7 @@ Proof of concept for bpfbox permission model.
 ## As a Proof of Concept
 
 - Figure out how we can get from the *pseudocode policy* to the *generated policy*
-- And from the *generated* to the *final BPF program*
+- And from the *generated/user-modified policy* to the *final BPF program*
 
 ## Some Important Questions
 
