@@ -1,2 +1,3 @@
-# bpfbox-proof-of-concept
-Proof of concept for bpfbox permission model
+# bpfbox Proof of Concept
+
+Proof of concept for bpfbox permission model.
