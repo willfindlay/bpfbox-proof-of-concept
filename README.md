@@ -2,6 +2,12 @@
 
 Proof of concept for bpfbox permission model.
 
+## Warning:
+
+Do not run webserver.py on your own system. It is designed to be extremely insecure.
+
+Running it while bpf_program.py is running should actually be fine, but I do not make any guarantees. Exercise caution.
+
 ## Components
 
 - Vulnerable Flask webserver (with a backdoor that we want to defend against)
