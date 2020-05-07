@@ -4,7 +4,7 @@ Proof of concept for bpfbox permission model.
 
 ## Components
 
-- Vulnerable Flask webserver (exposes a code injection attack on purpose)
+- Vulnerable Flask webserver (with a backdoor that we want to defend against)
 - Pseudocode confinement policy for the webserver
 - eBPF program to represent the confinement policy and enforce it
 

@@ -1,0 +1,26 @@
+ <!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>A Simple Page</title>
+  <meta name="author" content="William Findlay">
+  <meta name="description" content="A simple static page">
+  <link rel="stylesheet" href="stylesheet.css" type="text/css">
+  </head>
+  <body>
+
+  <form action="/", method="post">
+    <label for="name">What is your name?</label><br>
+    <input type="text" id="name" name="name"></input><br><br>
+    <input type="submit" value="Submit"></input>
+  </form>
+
+  <br>
+
+  {{ message }}
+
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js" type="text/javascript"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/modernizr/2.5.3/modernizr.min.js" type="text/javascript"></script>
+  </body>
+</html>

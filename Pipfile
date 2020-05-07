@@ -5,9 +5,11 @@ verify_ssl = true
 
 [dev-packages]
 pylint = "*"
+jedi = "*"
 
 [packages]
 flask = "*"
+requests = "*"
 
 [requires]
 python_version = "3.8"
