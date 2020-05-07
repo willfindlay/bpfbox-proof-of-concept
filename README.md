@@ -1,4 +1,4 @@
-# bpfbox Proof of Concept
+# 🐝 BPFBox 📦 Proof of Concept
 
 Proof of concept for bpfbox permission model.
 
