@@ -1,1 +1,25 @@
-# Pseudocode for generated BPFBox policy for webserver
+# This file contains pseudocode for writing the policy
+
+# The TAINT rule defines when the process has entered a potentially insecure state
+# A missing TAINT rule implies that the process is tainted after the first execve call
+# Here we taint the process as soon as it binds to an AF_INET socket on any port
+TAINT bind_inet(*)
+
+# We want to allow the process to read any file in the static directory
+ALLOW read("/path/to/server/static/*")
+# We want to allow the process to write to static/guestbook.txt
+ALLOW write("/path/to/server/guestbook.txt")
+
+# NOTE: The rules above this line take precedence over rules below
+
+# We don't want the process to read or write any other files
+DENY  read("*")
+DENY  write("*")
+
+# We also don't want the process to execute any programs
+DENY  exec("*")
+
+# Finally, we do not want the process to attempt to bind to any other ports
+DENY  bind_inet(*)
+
+# The above rules can be cleanly and easily expressed via an eBPF program observing system calls
