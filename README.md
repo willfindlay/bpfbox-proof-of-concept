@@ -24,3 +24,12 @@ Running it while bpf_program.py is running should actually be fine, but I do not
 - What does the compilation look like?
 - What does the generation of the policy look like?
 - How much user intervention do we require to get from a generated policy to the policy we describe here?
+
+## Another Potential Approach
+
+- Have a few default modes
+    - unrestricted
+    - app directories
+    - isolated app
+    - custom restricted (this is where we specify custom rules)
+- Transition between these states using mode rules
