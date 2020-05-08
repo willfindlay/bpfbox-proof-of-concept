@@ -49,7 +49,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 {
     char comm[16];
     bpf_get_current_comm(comm, sizeof(comm));
-    if (!bpf_strcmp(comm, "webserver.py"))
+    if (!bpf_strcmp(comm, "ls"))
         bpf_trace_printk("ls!\n");
 
     return 0;
