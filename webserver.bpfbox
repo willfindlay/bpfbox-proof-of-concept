@@ -10,16 +10,8 @@ ALLOW read("/path/to/server/static/*")
 # We want to allow the process to write to static/guestbook.txt
 ALLOW write("/path/to/server/guestbook.txt")
 
-# NOTE: The rules above this line take precedence over rules below
-
-# We don't want the process to read or write any other files
-DENY  read("*")
-DENY  write("*")
-
-# We also don't want the process to execute any programs
-DENY  exec("*")
-
-# Finally, we do not want the process to attempt to bind to any other ports
-DENY  bind_inet(*)
-
-# The above rules can be cleanly and easily expressed via an eBPF program observing system calls
+# Every other mediated operation is denied by default:
+#    * File access
+#    * Program execution
+#    * Network access
+#    * IPC
