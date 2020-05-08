@@ -1,4 +1,4 @@
-#include <linux/limits.h>
+#include <linux/binfmts.h>
 
 typedef struct
 {
@@ -33,14 +33,14 @@ RAW_TRACEPOINT_PROBE(sched_process_exec)
 {
     u32 pid = bpf_get_current_pid_tgid();
 
+    /* Yoink the linux_binprm */
+    struct linux_binprm *bprm = (struct linux_binprm *)ctx->args[2];
+
     /* Figure out if we are in webserver.py */
     // TODO
 
     /* Create / look up process */
     // TODO
-
-    /* Yoink the linux_binprm */
-    struct linux_binprm *bprm = (struct linux_binprm *)ctx->args[2];
 
     return 0;
 }
