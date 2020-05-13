@@ -1,17 +1,46 @@
 #! /usr/bin/env python3
 
-import os
-import sys
+import os, sys
 import signal
 import atexit
 import time
 import argparse
+from textwrap import dedent
 
 from bcc import BPF
 
 from utils import drop_privileges, which
 
 WEBSERVER_PATH = "../webserver/webserver.py"
+STATIC = "../webserver/static/"
+GUESTBOOK = "../webserver/guestbook.txt"
+
+
+def generate_fs_rules(mode, path):
+    """
+    Generate fs rules for mode + path.
+    Mode is one of 'r', 'w', or 'rw'
+    """
+    assert mode in ['r', 'w', 'rw']
+
+    write, read, readwrite = [], [], []
+
+    return write, read, readwrite
+
+
+def apply_rules(text):
+    """
+    Generate rules for the BPF program
+    """
+    fs_write_rules = " || ".join([])
+    text = text.replace('FS_WRITE_RULES', dedent(fs_write_rules))
+
+    fs_read_rules = " || ".join([])
+    text = text.replace('FS_READ_RULES', dedent(fs_read_rules))
+
+    fs_readwrite_rules = " || ".join([])
+    text = text.replace('FS_READWRITE_RULES', dedent(fs_readwrite_rules))
+    return text
 
 
 def load_program(pid):
@@ -20,7 +49,13 @@ def load_program(pid):
     """
     with open("bpf_program.c", "r") as f:
         text = f.read()
-    flags = [f"-DTHE_PID={pid}"]
+    flags = [
+        # The PID of the webserver
+        f'-DTHE_PID={pid}',
+        # Unknown attributes are okay
+        '-Wno-unknown-attributes',
+    ]
+    text = apply_rules(text)
     return BPF(text=text, cflags=flags)
 
 
@@ -64,9 +99,13 @@ if __name__ == "__main__":
 
     atexit.register(cleanup)
 
-    pid = run_binary(f"python3 {WEBSERVER_PATH}")
-    b = load_program(pid=pid)
-    os.kill(pid, signal.SIGUSR1)
+    try:
+        pid = run_binary(f"python3 {WEBSERVER_PATH}")
+        b = load_program(pid=pid)
+        os.kill(pid, signal.SIGUSR1)
+    except:
+        os.kill(pid, signal.SIGKILL)
+        sys.exit(-1)
 
     while 1:
         b.trace_print()

