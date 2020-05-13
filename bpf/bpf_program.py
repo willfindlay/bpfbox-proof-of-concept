@@ -5,82 +5,111 @@ import signal
 import atexit
 import time
 import argparse
+import stat
 from textwrap import dedent
 
 from bcc import BPF
 
-from utils import drop_privileges, which
+from utils import run_binary
 
 WEBSERVER_PATH = "../webserver/webserver.py"
 STATIC = "../webserver/static/"
 GUESTBOOK = "../webserver/guestbook.txt"
 
 
-def generate_fs_rules(mode, path):
-    """
-    Generate fs rules for mode + path.
-    Mode is one of 'r', 'w', or 'rw'
-    """
-    assert mode in ['r', 'w', 'rw']
+class BPFBoxRules:
+    def __init__(self):
+        self.fs_read_rules = []
+        self.fs_write_rules = []
+        self.fs_readwrite_rules = []
 
-    write, read, readwrite = [], [], []
+        self.generate_fs_rule('r', '/etc/host.conf')
+        self.generate_fs_rule('r', '/usr/lib/python3.*/stringprep.py')
+        self.generate_fs_rule('r', '/etc/resolv.conf')
+        self.generate_fs_rule('r', '/etc/nsswitch.conf')
+        self.generate_fs_rule('r', '/etc/ld.so.cache')
+        self.generate_fs_rule('r', '/usr/lib/libnss_files*')
+        self.generate_fs_rule('r', '/etc/hosts')
+        self.generate_fs_rule('r', '/usr/lib/libgcc_s.*')
+        self.generate_fs_rule(
+            'r',
+            '/usr/lib/python3.8/site-packages/jinja2/__pycache__/ext.cpython-38.pyc',
+        )
+        self.generate_fs_rule(
+            'r',
+            '/home/housedhorse/.local/share/virtualenvs/bpfbox-proof-of-'
+            'concept-*/lib/python3.8/site-packages/jinja2/__pycache__/*',
+        )
+        self.generate_fs_rule('r', STATIC)
+        self.generate_fs_rule('rw', GUESTBOOK)
 
-    return write, read, readwrite
+    def generate_fs_rule(self, mode, path):
+        """
+        Generate fs rule for mode + path.
+        Mode is one of 'r', 'w', or 'rw'
+        """
+        from glob import glob
 
+        assert mode in ['r', 'w', 'rw']
 
-def apply_rules(text):
-    """
-    Generate rules for the BPF program
-    """
-    fs_write_rules = " || ".join([])
-    text = text.replace('FS_WRITE_RULES', dedent(fs_write_rules))
+        paths = glob(path)
 
-    fs_read_rules = " || ".join([])
-    text = text.replace('FS_READ_RULES', dedent(fs_read_rules))
+        # TODO: compute rule based on path
+        for path in paths:
+            # Path is a directory
+            if os.path.isdir(path):
+                rule = f'parent_inode == {os.lstat(path)[stat.ST_INO]}'
+            # Path is a file
+            elif os.path.isfile(path):
+                rule = f'inode == {os.lstat(path)[stat.ST_INO]}'
 
-    fs_readwrite_rules = " || ".join([])
-    text = text.replace('FS_READWRITE_RULES', dedent(fs_readwrite_rules))
-    return text
+            if mode == 'r':
+                self.fs_read_rules.append(rule)
 
+            if mode == 'w':
+                self.fs_write_rules.append(rule)
 
-def load_program(pid):
-    """
-    Load the BPF program and set any build flags.
-    """
-    with open("bpf_program.c", "r") as f:
-        text = f.read()
-    flags = [
-        # The PID of the webserver
-        f'-DTHE_PID={pid}',
-        # Unknown attributes are okay
-        '-Wno-unknown-attributes',
-    ]
-    text = apply_rules(text)
-    return BPF(text=text, cflags=flags)
+            if mode == 'rw':
+                self.fs_readwrite_rules.append(rule)
 
+    def apply_rules(self, text):
+        """
+        Generate and apply rules for the BPF program
+        """
+        text = text.replace(
+            'FS_WRITE_RULES',
+            ' || '.join(self.fs_write_rules) if self.fs_write_rules else '0',
+        )
 
-def cleanup():
-    """
-    Run any necessary cleanup.
-    """
-    pass
+        fs_read_rules = []
+        text = text.replace(
+            'FS_READ_RULES',
+            ' || '.join(self.fs_read_rules) if self.fs_read_rules else '0',
+        )
 
+        fs_readwrite_rules = []
+        text = text.replace(
+            'FS_READWRITE_RULES',
+            ' || '.join(self.fs_readwrite_rules)
+            if self.fs_readwrite_rules
+            else '0',
+        )
+        return text
 
-@drop_privileges
-def run_binary(args_str):
-    # Wake up and do nothing on SIGCLHD
-    signal.signal(signal.SIGUSR1, lambda x, y: None)
-    # Reap zombies
-    signal.signal(signal.SIGCHLD, lambda x, y: os.wait())
-    args = args_str.split()
-    binary = which(args[0])
-    pid = os.fork()
-    # Setup traced process
-    if pid == 0:
-        signal.pause()
-        os.execvp(binary, args)
-    # Return pid of traced process
-    return pid
+    def load_program(self, pid):
+        """
+        Load the BPF program and set any build flags.
+        """
+        with open("bpf_program.c", "r") as f:
+            text = f.read()
+        flags = [
+            # The PID of the webserver
+            f'-DTHE_PID={pid}',
+            # Unknown attributes are okay
+            '-Wno-unknown-attributes',
+        ]
+        text = self.apply_rules(text)
+        return BPF(text=text, cflags=flags)
 
 
 if __name__ == "__main__":
@@ -97,11 +126,11 @@ if __name__ == "__main__":
     if os.geteuid() != 0:
         parser.error("Need superuser privileges to run")
 
-    atexit.register(cleanup)
+    bpfbox = BPFBoxRules()
 
     try:
         pid = run_binary(f"python3 {WEBSERVER_PATH}")
-        b = load_program(pid=pid)
+        b = bpfbox.load_program(pid=pid)
         os.kill(pid, signal.SIGUSR1)
     except:
         os.kill(pid, signal.SIGKILL)

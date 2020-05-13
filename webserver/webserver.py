@@ -1,12 +1,13 @@
 #! /usr/bin/env python3
 
+import os
 import re
 import time
 import subprocess
 
 from flask import Flask, jsonify, request, render_template, redirect
 
-GUESTS_FILE = "guestbook.txt"
+GUESTS_FILE = os.path.join(os.path.dirname(__file__), "guestbook.txt")
 
 app = Flask(__name__, template_folder="static")
 message = ""

@@ -100,6 +100,7 @@ int kretprobe__do_filp_open(struct pt_regs *ctx)
     u32 inode = dentry->d_inode->i_ino;
     u32 parent_inode = parent ? parent->d_inode->i_ino : 0;
     umode_t mode = op->mode;
+    int acc_mode = op->acc_mode;
 
     bpf_trace_printk("mode %d\n", mode);
 
@@ -124,10 +125,14 @@ int kretprobe__do_filp_open(struct pt_regs *ctx)
             return 0;
     }
 
+    bpf_trace_printk("enforcing on %s!\n", dentry->d_name.name);
+
     bpf_send_signal(SIGKILL);
 
     return 0;
 }
+
+TRACEPOINT_PROBE(s)
 
 TRACEPOINT_PROBE(syscalls, sys_enter_bind)
 {

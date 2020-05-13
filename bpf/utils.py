@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import signal
 
 
 def drop_privileges(function):
@@ -53,3 +54,20 @@ def which(binary):
             return os.path.realpath(binary)
         else:
             raise Exception(f"{binary} not found")
+
+
+@drop_privileges
+def run_binary(args_str):
+    # Wake up and do nothing on SIGCLHD
+    signal.signal(signal.SIGUSR1, lambda x, y: None)
+    # Reap zombies
+    signal.signal(signal.SIGCHLD, lambda x, y: os.wait())
+    args = args_str.split()
+    binary = which(args[0])
+    pid = os.fork()
+    # Setup traced process
+    if pid == 0:
+        signal.pause()
+        os.execvp(binary, args)
+    # Return pid of traced process
+    return pid
