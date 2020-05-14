@@ -4,6 +4,8 @@ Proof of concept for bpfbox permission model.
 
 ## Instructions
 
+**WARNING: It is recommended that you do not try the demo on your own machine. If something goes wrong, the demo has the potential to kill arbitrary processes on your system.** It is recommended to run this demo in a VM.
+
 To try the demo do the following:
 
 1. Clone this repo
