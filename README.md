@@ -2,6 +2,18 @@
 
 Proof of concept for bpfbox permission model.
 
+## Instructions
+
+To try the demo do the following:
+
+1. Clone this repo
+2. Run `sudo python3 bpf/bpf_program.py`. It will fork itself and execute the webserver automatically.
+3. Go to `localhost:8080` and fill out the form to sign the guestbook.
+4. To run the backdoor, enter `testificate <shell command here>`.
+5. bpfbox will kill the child process before it can execute the shell command.
+6. If you have any problems with the pre-generated policy, you can edit the rules in `__init__` in `bpf_program.py`
+7. If you want to see behavior without bpfbox, just run `webserver.py` on its own.
+
 ## Warning:
 
 Do not run webserver.py on your own system. It is designed to be extremely insecure.
