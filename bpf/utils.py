@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import signal
+import itertools
 
 
 def drop_privileges(function):
@@ -41,6 +42,9 @@ def drop_privileges(function):
 
 
 def which(binary):
+    """
+    Find a binary if it exists.
+    """
     try:
         w = subprocess.Popen(
             ["which", binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -58,6 +62,9 @@ def which(binary):
 
 @drop_privileges
 def run_binary(args_str):
+    """
+    Drop privileges and run a binary if it exists.
+    """
     # Wake up and do nothing on SIGCLHD
     signal.signal(signal.SIGUSR1, lambda x, y: None)
     # Reap zombies
@@ -71,3 +78,12 @@ def run_binary(args_str):
         os.execvp(binary, args)
     # Return pid of traced process
     return pid
+
+
+def powerperm(ell):
+    s = list(ell)
+    perms = itertools.chain.from_iterable(
+        itertools.permutations(s, r) for r in range(1, len(s) + 1)
+    )
+    perms = map(lambda p: ''.join(list(p)), perms)
+    return list(perms)

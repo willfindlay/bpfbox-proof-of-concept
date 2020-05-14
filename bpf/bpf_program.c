@@ -39,14 +39,83 @@ static struct bpfbox_state *create_or_lookup_bpfbox_state(u32 pid)
     return states.lookup_or_try_init(&pid, &temp);
 }
 
+/*
+ * TODO: In the future, we will determine our profile based on what binary /
+ * script is running.
+ *
+ * The problem is that I'm not sure about the best way to extract that sort of
+ * information for interpretted files, such as webserver.py. Depending on how
+ * the file is run, we either have a (file, interp) pair of (python3, webserver.py)
+ * or (python3, python3). The former case is trivial, but the latter case
+ * causes problems.
+ *
+ * For this proof of concept, we won't worry about any of this, and instead
+ * elect to pass the webserver's PID via a command line argument. */
+RAW_TRACEPOINT_PROBE(sched_process_exec)
+{
+    // Check pid and create state for process if we are in the right process
+    u32 pid = bpf_get_current_pid_tgid();
+    struct bpfbox_state *state;
+    if (pid == THE_PID)
+        state = create_or_lookup_bpfbox_state(pid);
+    else
+        state = states.lookup(&pid);
+
+    if (!state)
+        return 0;
+
+    /* Yoink the linux_binprm */
+    struct linux_binprm *bprm = (struct linux_binprm *)ctx->args[2];
+    struct dentry *dentry = bprm->file->f_path.dentry;
+    struct dentry *parent = bprm->file->f_path.dentry->d_parent;
+    u32 inode = dentry->d_inode->i_ino;
+    u32 parent_inode = parent ? parent->d_inode->i_ino : 0;
+
+    // The following actually actually shouldn't be necessary
+    // since we are already enforcing execution in do_filp_open
+
+    //if (state->tainted)
+    //{
+    //    bpf_trace_printk("hello executing world!\n");
+    //    if (FS_EXEC_RULES)
+    //        return 0;
+    //    else
+    //        bpf_send_signal(SIGKILL);
+    //}
+
+    return 0;
+}
+
+/* Probe every fork/vfork/clone and duplicate the current
+ * bpfbox state, including taintedness. */
+RAW_TRACEPOINT_PROBE(sched_process_fork)
+{
+    struct bpfbox_state *state;
+
+    struct task_struct *p = (struct task_struct *)ctx->args[0];
+    struct task_struct *c = (struct task_struct *)ctx->args[1];
+
+    u32 ppid = p->pid;
+    u32 cpid = c->pid;
+
+    state = states.lookup(&ppid);
+    if (!state)
+        return 0;
+
+    states.update(&cpid, state);
+
+    return 0;
+}
+
 /* A kprobe that checks the arguments to do_filp_open
  * (underlying implementation of open, openat, and openat2). */
 int kprobe__do_filp_open(struct pt_regs *ctx, int dfd,
         struct filename *pathname, const struct open_flags *op)
 {
-    // Check pid
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != THE_PID)
+    // Check pid and lookup state if it exists
+    u32 pid = bpf_get_current_pid_tgid();
+    struct bpfbox_state *state = states.lookup(&pid);
+    if (!state)
         return 0;
 
     int zero = 0;
@@ -63,9 +132,10 @@ int kprobe__do_filp_open(struct pt_regs *ctx, int dfd,
  * and openat2). */
 int kretprobe__do_filp_open(struct pt_regs *ctx)
 {
-    // Check pid
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != THE_PID)
+    // Check pid and lookup state if it exists
+    u32 pid = bpf_get_current_pid_tgid();
+    struct bpfbox_state *state = states.lookup(&pid);
+    if (!state)
         return 0;
 
     // Yoink file pointer from retuen value
@@ -83,11 +153,6 @@ int kretprobe__do_filp_open(struct pt_regs *ctx)
         return 0;
     }
 
-    // Create or lookup bpfbox_state
-    struct bpfbox_state *state = create_or_lookup_bpfbox_state(pid);
-    if (!state)
-        return 0;
-
     // If we are not tainted we don't care
     if (!state->tainted)
     {
@@ -96,33 +161,44 @@ int kretprobe__do_filp_open(struct pt_regs *ctx)
 
     struct dentry *dentry = fp->f_path.dentry;
     struct dentry *parent = fp->f_path.dentry->d_parent;
-
     u32 inode = dentry->d_inode->i_ino;
     u32 parent_inode = parent ? parent->d_inode->i_ino : 0;
-    umode_t mode = op->mode;
     int acc_mode = op->acc_mode;
 
-    bpf_trace_printk("mode %d\n", mode);
-
-    if ((mode & O_ACCMODE) == O_WRONLY)
+    if (acc_mode & MAY_WRITE)
     {
         bpf_trace_printk("hello writing world!\n");
         if (FS_WRITE_RULES)
             return 0;
+        else
+            bpf_send_signal(SIGKILL);
     }
 
-    if ((mode & O_ACCMODE) == O_RDONLY)
+    if (acc_mode & MAY_READ)
     {
         bpf_trace_printk("hello reading world!\n");
         if (FS_READ_RULES)
             return 0;
+        else
+            bpf_send_signal(SIGKILL);
     }
 
-    if ((mode & O_ACCMODE) == O_RDWR)
+    if (acc_mode & MAY_APPEND)
     {
-        bpf_trace_printk("hello reading and writing world!\n");
-        if (FS_READWRITE_RULES)
+        bpf_trace_printk("hello appending world!\n");
+        if (FS_APPEND_RULES)
             return 0;
+        else
+            bpf_send_signal(SIGKILL);
+    }
+
+    if (acc_mode & MAY_EXEC)
+    {
+        bpf_trace_printk("hello executing world!\n");
+        if (FS_EXEC_RULES)
+            return 0;
+        else
+            bpf_send_signal(SIGKILL);
     }
 
     bpf_trace_printk("enforcing on %s!\n", dentry->d_name.name);
@@ -132,17 +208,11 @@ int kretprobe__do_filp_open(struct pt_regs *ctx)
     return 0;
 }
 
-TRACEPOINT_PROBE(s)
-
 TRACEPOINT_PROBE(syscalls, sys_enter_bind)
 {
-    // Check PID
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != THE_PID)
-        return 0;
-
-    // Create or lookup bpfbox_state
-    struct bpfbox_state *state = create_or_lookup_bpfbox_state(pid);
+    // Check pid and lookup state if it exists
+    u32 pid = bpf_get_current_pid_tgid();
+    struct bpfbox_state *state = states.lookup(&pid);
     if (!state)
         return 0;
 
@@ -163,19 +233,6 @@ TRACEPOINT_PROBE(syscalls, sys_enter_bind)
 
     // Default deny after taint
     bpf_send_signal(SIGKILL);
-
-    return 0;
-}
-
-TRACEPOINT_PROBE(raw_syscalls, sys_exit)
-{
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-
-    long syscall = args->id;
-
-    // Check PID
-    if (pid != THE_PID)
-        return 0;
 
     return 0;
 }
